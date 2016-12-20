@@ -10,7 +10,7 @@ require 'open-uri/cached'
 OpenURI::Cache.cache_path = '.cache'
 
 def noko_for(url)
-  Nokogiri::HTML(open(url).read) 
+  Nokogiri::HTML(open(url).read)
 end
 
 def date_from(date)
@@ -18,15 +18,15 @@ def date_from(date)
   Date.parse(date).to_s
 end
 
-def scrape_list(t)
-  puts "Scraping #{t[:id]}"
-  noko = noko_for(t[:source])
+def scrape_list(id, url)
+  puts "Scraping #{id}"
+  noko = noko_for(url)
   noko.css('#ledamots a/@href').map(&:text).each do |link|
-    scrape_mp(t, URI.join(t[:source], link).to_s)
+    scrape_mp(URI.join(url, link).to_s, id)
   end
  end
 
-def scrape_mp(t, url)
+def scrape_mp(url, termid)
   noko = noko_for(url)
   box = noko.css('div#news')
   named = ->(t) { box.xpath("(.//strong[contains(.,'#{t}')] | .//b[contains(.,'#{t}')])/following-sibling::text()") }
@@ -37,26 +37,15 @@ def scrape_mp(t, url)
     party: named.("Grupptill").first.text.gsub(/[[:space:]]+/, ' ').strip,
     birth_date: date_from(named.("Föd").first.text.gsub(/[[:space:]]+/, ' ').strip),
     email: named.("E-post").text.gsub(/\(.*?\)/,'').sub(/[Ss]kriv/,'').sub('och lägg till','').gsub(/[[:space:]]/,''),
-    term: t[:id],
+    term: termid,
   }
   data[:image] = URI.join(url, data[:image]).to_s unless data[:image].to_s.empty?
   ScraperWiki.save_sqlite([:id, :term], data)
 end
 
-terms = [{
-  id: 2007,
-  name: '2007–2011',
-  start_date: '2007',
-  end_date: '2011',
-  source: 'http://www.lagtinget.ax/ledamot_earlier.con?iPage=132&m=257',
-},{
-  id: 2011,
-  name: '2011–',
-  start_date: '2011',
-  source: 'http://www.lagtinget.ax/ledamot_az.con?iPage=104&m=262',
-}]
-ScraperWiki.save_sqlite([:id], terms, 'terms')
+terms = [
+  [ 2007, 'http://www.lagtinget.ax/ledamot_earlier.con?iPage=132&m=257' ],
+  [ 2011, 'http://www.lagtinget.ax/ledamot_az.con?iPage=104&m=262' ]
+]
 
-terms.each do |t|
-  scrape_list(t)
-end
+terms.each { |id, url| scrape_list(id, url) }
